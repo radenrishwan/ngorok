@@ -28,13 +28,19 @@ func generateTunnelID() string {
 }
 
 type TunnelServerOption struct {
-	OnRequest func(id string, conn net.Conn)
-	HttpPort  string
+	OnRequest         func(id string, conn net.Conn)
+	OnTunnelDestroyed func(id string)
+	HttpPort          string
+	// this is used to make the `Prod-URL` header return HTTPS endpoint instead of HTTP
+	EnableTLS bool
 }
 
 var DefaultTunnelServerOption = TunnelServerOption{
 	OnRequest: func(id string, conn net.Conn) {
 		fmt.Printf("New tunnel established: %s\n", id)
+	},
+	OnTunnelDestroyed: func(id string) {
+		fmt.Printf("Tunnel destroyed: %s\n", id)
 	},
 }
 
@@ -88,6 +94,10 @@ func (self *TunnelServer) handleTunnelConnection(id string, conn net.Conn, errMe
 	localURL := fmt.Sprintf("http://localhost:%s/tunnel/%s", self.option.HttpPort, id)
 	prodURL := fmt.Sprintf("http://%s.%s", id, self.baseDomain)
 
+	if self.option.EnableTLS {
+		prodURL = fmt.Sprintf("https://%s.%s", id, self.baseDomain)
+	}
+
 	msg := TunnelMessage{
 		Type: TunnelCreated,
 		ID:   id,
@@ -107,6 +117,8 @@ func (self *TunnelServer) handleTunnelConnection(id string, conn net.Conn, errMe
 	defer func() {
 		conn.Close()
 		tunnels.Delete(id)
+
+		self.option.OnTunnelDestroyed(id)
 	}()
 
 	// handle tunnel requests

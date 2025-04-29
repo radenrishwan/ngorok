@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"github.com/radenrishwan/ngorok"
 )
@@ -15,6 +16,7 @@ var (
 	tunnelPort = flag.String("tunnel-port", "9000", "Port for the tunnel server")
 	httpPort   = flag.String("http-port", "8000", "Port for the HTTP server")
 	baseDomain = flag.String("domain", "localhost", "Base domain for tunnels")
+	enableTLS  = flag.Bool("tls", false, "Enalbe TLS with Let's Encrypt")
 )
 
 func main() {
@@ -30,6 +32,7 @@ func main() {
 	tunnelPort := *tunnelPort
 	httpPort := *httpPort
 	baseDomain := *baseDomain
+	enableTLS := *enableTLS
 
 	fmt.Println("Starting tunnel server...")
 
@@ -41,7 +44,11 @@ func main() {
 			fmt.Printf("🏠 %s\n", localURL)
 			fmt.Printf("🌐 %s\n", prodURL)
 		},
-		HttpPort: httpPort,
+		OnTunnelDestroyed: func(id string) {
+			fmt.Printf("👊 %s destroyed\n", id)
+		},
+		HttpPort:  httpPort,
+		EnableTLS: enableTLS,
 	})
 
 	errMessage := make(chan error)
@@ -49,7 +56,9 @@ func main() {
 	go tunnelServer.Start(errMessage)
 
 	fmt.Println("Starting HTTP server...")
-	server := ngorok.NewServer(httpPort, baseDomain, nil)
+	server := ngorok.NewServer(httpPort, baseDomain, &ngorok.ServerOption{
+		Timeout: time.Second * 30,
+	})
 	go server.Start(errMessage)
 
 	for {
